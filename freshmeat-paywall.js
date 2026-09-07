@@ -6,7 +6,7 @@ const firebaseConfig = {
   storageBucket: "freshmeat-96c63.firebasestorage.app",
   messagingSenderId: "1051584393564",
   appId: "1:1051584393564:web:22c2d620b33cbdeb225199",
-  measurementId: "G-80KFY9B5BT
+  measurementId: "G-80KFY9B5BT"
 };
 
 // Initialize Firebase

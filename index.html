@@ -252,7 +252,14 @@
     font-weight: 800;
     color: var(--ink);
     text-align: center;
-    padding: 2px 0 6px;
+    padding: 2px 0 2px;
+  }
+  .bill-meta .shop-address {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.4;
+    padding: 0 0 6px;
     border-bottom: 1px dashed var(--border);
     margin-bottom: 6px;
   }
@@ -1008,7 +1015,8 @@
         currentInvoice = { no: makeInvoiceNo(now), date, time, timestamp: now };
       }
       metaEl.innerHTML = `
-      <div class="shop-name">${SHOP_NAME}</div
+      <div class="shop-name">${SHOP_NAME}</div>
+        <div class="shop-address">${SHOP_ADDRESS}<br>Mobile No: ${SHOP_MOBILE}</div>
         <div class="row"><span>Invoice No.</span><span>${currentInvoice.no}</span></div>
         <div class="row"><span>Date</span><span>${currentInvoice.date}</span></div>
         <div class="row"><span>Time</span><span>${currentInvoice.time}</span></div>`;

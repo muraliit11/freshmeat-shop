@@ -247,6 +247,15 @@
     color: var(--muted);
     margin-bottom: 12px;
   }
+  .bill-meta .shop-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+    text-align: center;
+    padding: 2px 0 6px;
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 6px;
+  }
   .bill-meta .row {
     display: flex;
     justify-content: space-between;
@@ -652,7 +661,7 @@
 
   const UPI_ID = "muraliit11@okhdfcbank";
   const UPI_NAME = "Murali S";
-  const SHOP_NAME = "FreshMeat";
+   const SHOP_NAME = "FreshMeat";
 
   // Change this to set your own admin password for editing prices
   let ADMIN_PASSWORD = "admin123";
@@ -997,6 +1006,7 @@
         currentInvoice = { no: makeInvoiceNo(now), date, time, timestamp: now };
       }
       metaEl.innerHTML = `
+      <div class="shop-name">${SHOP_NAME}</div
         <div class="row"><span>Invoice No.</span><span>${currentInvoice.no}</span></div>
         <div class="row"><span>Date</span><span>${currentInvoice.date}</span></div>
         <div class="row"><span>Time</span><span>${currentInvoice.time}</span></div>`;

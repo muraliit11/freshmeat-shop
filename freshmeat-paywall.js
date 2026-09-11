@@ -1,84 +1,179 @@
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDoi4C6XNRMgyNNd4Ht3O33_EySe1Ked08",
-  authDomain: "freshmeat-96c63.firebaseapp.com",
-  projectId: "freshmeat-96c63",
-  storageBucket: "freshmeat-96c63.firebasestorage.app",
-  messagingSenderId: "1051584393564",
-  appId: "1:1051584393564:web:22c2d620b33cbdeb225199",
-  measurementId: "G-80KFY9B5BT"
+  apiKey: "AIzaSyBFxIFfgtTYT8vb42rPIQ-eJClzm73xttw",
+  authDomain: "freshmeat-6bfd0.firebaseapp.com",
+  projectId: "freshmeat-6bfd0",
+  storageBucket: "freshmeat-6bfd0.firebasestorage.app",
+  messagingSenderId: "329301869183",
+  appId: "1:329301869183:web:5145e6b73cc5a85e85b54a",
+  measurementId: "G-ZB314FHRJ6"
 };
 
-// Initialize Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-const app = initializeApp(firebaseConfig);
+import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-// ---- Trial & Paywall Logic (Razorpay) ----
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// ---- Trial & Paywall Logic (Phone-verified, Firestore-backed) ----
 const TRIAL_HOURS = 1;
 const SUBSCRIPTION_HOURS = 24;
 const SUBSCRIPTION_PRICE = 20; // in rupees
-const RAZORPAY_KEY_ID = "rzp_test_TZFbd4BQVev0in"; // TEST key for now
+const UPI_ID = "9940491206@upi"; // replace with your actual UPI ID
 
-function getPaywallState() {
-  let firstVisit = localStorage.getItem("fm_firstVisit");
-  if (!firstVisit) {
-    firstVisit = Date.now();
-    localStorage.setItem("fm_firstVisit", firstVisit);
-  }
-  const unlockUntil = Number(localStorage.getItem("fm_unlockUntil") || 0);
-  return { firstVisit: Number(firstVisit), unlockUntil };
+let confirmationResult = null;
+
+function getVerifiedPhone() {
+  return localStorage.getItem("fm_verifiedPhone");
 }
 
-function isAccessAllowed() {
-  const { firstVisit, unlockUntil } = getPaywallState();
+function setVerifiedPhone(phone) {
+  localStorage.setItem("fm_verifiedPhone", phone);
+}
+
+async function getOrCreateTrialDoc(phone) {
+  const ref = doc(db, "trials", phone);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    return snap.data();
+  }
+  const data = { firstVisit: Date.now(), unlockUntil: 0 };
+  await setDoc(ref, data);
+  return data;
+}
+
+async function markPaid(phone) {
+  const unlockUntil = Date.now() + SUBSCRIPTION_HOURS * 60 * 60 * 1000;
+  const ref = doc(db, "trials", phone);
+  await setDoc(ref, { unlockUntil }, { merge: true });
+  return unlockUntil;
+}
+
+function isAccessAllowed(trialData) {
   const now = Date.now();
-  const trialExpiry = firstVisit + TRIAL_HOURS * 60 * 60 * 1000;
+  const trialExpiry = trialData.firstVisit + TRIAL_HOURS * 60 * 60 * 1000;
   if (now < trialExpiry) return true;
-  if (now < unlockUntil) return true;
+  if (now < (trialData.unlockUntil || 0)) return true;
   return false;
 }
 
-function showPaywall() {
-  const overlay = document.createElement("div");
-  overlay.id = "fm-paywall-overlay";
-  overlay.style.cssText = `
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-    display: flex; align-items: center; justify-content: center; z-index: 9999;
-  `;
+function showOverlay(innerHtml) {
+  let overlay = document.getElementById("fm-paywall-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "fm-paywall-overlay";
+    overlay.style.cssText = `
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center; z-index: 9999;
+    `;
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = innerHtml;
+  return overlay;
+}
 
-  overlay.innerHTML = `
+function removeOverlay() {
+  const overlay = document.getElementById("fm-paywall-overlay");
+  if (overlay) overlay.remove();
+}
+
+function showPhoneEntryScreen() {
+  showOverlay(`
     <div style="background:#F7F1EA; border-radius:16px; padding:28px; max-width:340px; text-align:center; font-family:'Inter',sans-serif;">
-      <h2 style="margin:0 0 8px;">Free trial ended</h2>
-      <p style="color:#8A6F5C; margin:0 0 20px;">Pay ₹${SUBSCRIPTION_PRICE} for 24 hours of access</p>
-      <button id="fm-pay-btn" style="width:100%; padding:12px; background:#7A2323; color:white; border:none; border-radius:8px; font-size:16px;">Pay ₹${SUBSCRIPTION_PRICE} with Razorpay</button>
+      <h2 style="margin:0 0 8px;">Verify your phone</h2>
+      <p style="color:#8A6F5C; margin:0 0 16px;">Enter your phone number to start your free trial</p>
+      <input id="fm-phone-input" type="tel" placeholder="+91XXXXXXXXXX" style="width:100%; padding:10px; margin-bottom:12px; border-radius:8px; border:1px solid #ccc; box-sizing:border-box;" />
+      <div id="fm-recaptcha-container"></div>
+      <button id="fm-send-otp-btn" style="width:100%; padding:12px; background:#7A2323; color:white; border:none; border-radius:8px; font-size:16px; margin-top:8px;">Send OTP</button>
+      <p id="fm-phone-error" style="color:#b00; font-size:13px; margin-top:10px;"></p>
     </div>
-  `;
-  document.body.appendChild(overlay);
+  `);
 
-  document.getElementById("fm-pay-btn").addEventListener("click", () => {
-    const options = {
-      key: RAZORPAY_KEY_ID,
-      amount: SUBSCRIPTION_PRICE * 100,
-      currency: "INR",
-      name: "FreshMeat",
-      description: "24-hour access pass",
-      handler: function (response) {
-        const unlockUntil = Date.now() + SUBSCRIPTION_HOURS * 60 * 60 * 1000;
-        localStorage.setItem("fm_unlockUntil", unlockUntil);
-        localStorage.setItem("fm_lastPaymentId", response.razorpay_payment_id);
-        overlay.remove();
-      },
-      theme: { color: "#7A2323" }
-    };
-    const rzp = new Razorpay(options);
-    rzp.open();
+  const recaptchaVerifier = new RecaptchaVerifier(auth, "fm-recaptcha-container", {
+    size: "invisible"
+  });
+
+  document.getElementById("fm-send-otp-btn").addEventListener("click", async () => {
+    const phoneInput = document.getElementById("fm-phone-input");
+    const phone = phoneInput.value.trim();
+    const errorEl = document.getElementById("fm-phone-error");
+    errorEl.textContent = "";
+
+    if (!/^\+\d{10,15}$/.test(phone)) {
+      errorEl.textContent = "Enter phone number with country code, e.g. +919940491206";
+      return;
+    }
+
+    try {
+      confirmationResult = await signInWithPhoneNumber(auth, phone, recaptchaVerifier);
+      showOtpEntryScreen(phone);
+    } catch (err) {
+      errorEl.textContent = "Failed to send OTP. Please try again.";
+      console.error(err);
+    }
   });
 }
 
-function initPaywall() {
-  if (!isAccessAllowed()) {
-    showPaywall();
+function showOtpEntryScreen(phone) {
+  showOverlay(`
+    <div style="background:#F7F1EA; border-radius:16px; padding:28px; max-width:340px; text-align:center; font-family:'Inter',sans-serif;">
+      <h2 style="margin:0 0 8px;">Enter OTP</h2>
+      <p style="color:#8A6F5C; margin:0 0 16px;">We sent a code to ${phone}</p>
+      <input id="fm-otp-input" type="text" inputmode="numeric" placeholder="123456" style="width:100%; padding:10px; margin-bottom:12px; border-radius:8px; border:1px solid #ccc; box-sizing:border-box;" />
+      <button id="fm-verify-otp-btn" style="width:100%; padding:12px; background:#7A2323; color:white; border:none; border-radius:8px; font-size:16px;">Verify</button>
+      <p id="fm-otp-error" style="color:#b00; font-size:13px; margin-top:10px;"></p>
+    </div>
+  `);
+
+  document.getElementById("fm-verify-otp-btn").addEventListener("click", async () => {
+    const code = document.getElementById("fm-otp-input").value.trim();
+    const errorEl = document.getElementById("fm-otp-error");
+    errorEl.textContent = "";
+
+    try {
+      await confirmationResult.confirm(code);
+      setVerifiedPhone(phone);
+      removeOverlay();
+      checkAccess();
+    } catch (err) {
+      errorEl.textContent = "Incorrect code. Please try again.";
+      console.error(err);
+    }
+  });
+}
+
+function showPaywallScreen(phone) {
+  const upiLink = `upi://pay?pa=${UPI_ID}&pn=FreshMeat&am=${SUBSCRIPTION_PRICE}&cu=INR&tn=24hr%20access%20pass`;
+  const qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
+
+  showOverlay(`
+    <div style="background:#F7F1EA; border-radius:16px; padding:28px; max-width:340px; text-align:center; font-family:'Inter',sans-serif;">
+      <h2 style="margin:0 0 8px;">Free trial ended</h2>
+      <p style="color:#8A6F5C; margin:0 0 16px;">Pay ₹${SUBSCRIPTION_PRICE} for 24 hours of access</p>
+      <img src="${qrImgSrc}" alt="UPI QR code" style="width:200px; height:200px; margin-bottom:16px; border-radius:8px;" />
+      <p style="font-size:13px; color:#8A6F5C; margin:0 0 16px;">Scan with any UPI app, then confirm below</p>
+      <button id="fm-paid-btn" style="width:100%; padding:12px; background:#7A2323; color:white; border:none; border-radius:8px; font-size:16px;">I've paid</button>
+    </div>
+  `);
+
+  document.getElementById("fm-paid-btn").addEventListener("click", async () => {
+    await markPaid(phone);
+    removeOverlay();
+  });
+}
+
+async function checkAccess() {
+  const phone = getVerifiedPhone();
+  if (!phone) {
+    showPhoneEntryScreen();
+    return;
+  }
+  const trialData = await getOrCreateTrialDoc(phone);
+  if (!isAccessAllowed(trialData)) {
+    showPaywallScreen(phone);
   }
 }
 
-initPaywall();
+checkAccess();

@@ -456,6 +456,22 @@
     margin-bottom: 14px;
     line-height: 1.5;
   }
+  .reset-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .reset-checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    text-align: left;
+  }
+  .reset-checkbox-row input { margin-top: 2px; }
   .toast {
     position: fixed;
     bottom: 24px;
@@ -610,6 +626,7 @@
     <div style="display:flex; align-items:center;">
       <button class="admin-btn" id="export-btn" onclick="exportToExcel()" style="display:none;">⬇️ Export</button>
       <button class="admin-btn" id="restore-btn" onclick="document.getElementById('restore-file-input').click()" style="display:none;">⬆️ Restore</button>
+      <button class="admin-btn" id="reset-invoice-btn" onclick="openInvoiceResetModal()" style="display:none;">🗑️ Reset Invoices</button>
       <input type="file" id="restore-file-input" accept=".xlsx" style="display:none;" onchange="handleRestoreFile(event)" />
       <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">🔒 Admin</button>
       <div class="cart-pill" onclick="openDrawer()">
@@ -702,6 +719,27 @@
     <div class="admin-error" id="newpass-error"></div>
     <button class="done-btn" onclick="submitNewPassword()">Save new password</button>
     <button class="cancel-btn" onclick="closeOtpModal()">Cancel</button>
+  </div>
+</div>
+
+<div class="admin-modal" id="invoice-reset-modal">
+  <div class="admin-box">
+    <h3>⚠️ Reset Invoice Data</h3>
+    <div class="reset-note">
+      This will permanently erase all bill history and reset the invoice number back to 001. <strong>This cannot be undone.</strong><br><br>
+      Please export a backup (⬇️ Export) first, or make sure you've saved a copy via email/WhatsApp/mobile — you will not be able to recover this data afterward.
+    </div>
+    <label class="reset-checkbox-row">
+      <input type="checkbox" id="reset-backup-confirm" />
+      <span>I have taken a backup and understand this cannot be undone.</span>
+    </label>
+    <div class="pw-wrap">
+      <input type="password" class="admin-input" id="reset-confirm-password" placeholder="Re-enter admin password" />
+      <button type="button" class="pw-toggle" id="reset-pw-toggle-btn" onclick="toggleResetPwVisibility()">👁️</button>
+    </div>
+    <div class="admin-error" id="invoice-reset-error"></div>
+    <button class="done-btn" onclick="confirmInvoiceReset()" style="background:var(--accent);">Reset Invoice Data</button>
+    <button class="cancel-btn" onclick="closeInvoiceResetModal()">Cancel</button>
   </div>
 </div>
 
@@ -869,6 +907,7 @@
       document.getElementById("admin-btn").classList.remove("unlocked");
       document.getElementById("export-btn").style.display = "none";
       document.getElementById("restore-btn").style.display = "none";
+      document.getElementById("reset-invoice-btn").style.display = "none";
       renderGrid();
       try { await window.firebaseAdminSignOut(); } catch (e) { /* ignore */ }
       return;
@@ -908,6 +947,7 @@
       document.getElementById("admin-btn").classList.add("unlocked");
       document.getElementById("export-btn").style.display = "inline-block";
       document.getElementById("restore-btn").style.display = "inline-block";
+      document.getElementById("reset-invoice-btn").style.display = "inline-block";
       renderGrid();
       closeAdminModal();
     } catch (err) {
@@ -989,6 +1029,59 @@
     } catch (err) {
       console.error(err);
       errorEl.textContent = err.message || "Couldn't reset the password. Try again.";
+    }
+  }
+
+  // --- Invoice/bill-history reset (double-confirm: backup checkbox + re-entered password) ---
+  function toggleResetPwVisibility() {
+    const input = document.getElementById("reset-confirm-password");
+    const btn = document.getElementById("reset-pw-toggle-btn");
+    if (input.type === "password") {
+      input.type = "text";
+      btn.textContent = "🙈";
+    } else {
+      input.type = "password";
+      btn.textContent = "👁️";
+    }
+  }
+
+  function openInvoiceResetModal() {
+    document.getElementById("reset-backup-confirm").checked = false;
+    document.getElementById("reset-confirm-password").value = "";
+    document.getElementById("reset-confirm-password").type = "password";
+    document.getElementById("reset-pw-toggle-btn").textContent = "👁️";
+    document.getElementById("invoice-reset-error").textContent = "";
+    document.getElementById("invoice-reset-modal").classList.add("open");
+  }
+
+  function closeInvoiceResetModal() {
+    document.getElementById("invoice-reset-modal").classList.remove("open");
+  }
+
+  async function confirmInvoiceReset() {
+    const backedUp = document.getElementById("reset-backup-confirm").checked;
+    const entered = document.getElementById("reset-confirm-password").value;
+    const errorEl = document.getElementById("invoice-reset-error");
+    errorEl.textContent = "";
+    if (!backedUp) {
+      errorEl.textContent = "Please confirm you've taken a backup first.";
+      return;
+    }
+    if (!entered) {
+      errorEl.textContent = "Please re-enter your admin password.";
+      return;
+    }
+    try {
+      await window.firebaseAdminSignIn(entered);
+      billHistory = [];
+      invoiceCounter = 1;
+      currentInvoice = null;
+      saveState();
+      renderDrawer();
+      closeInvoiceResetModal();
+      showToast("Invoice history reset. Numbering restarts at 001.");
+    } catch (err) {
+      errorEl.textContent = "Incorrect password.";
     }
   }
 

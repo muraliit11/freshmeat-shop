@@ -678,12 +678,12 @@
     <div class="pay-amount" id="pay-amount">₹0</div>
     <div class="pay-invoice-line" id="pay-invoice-no"></div>
     <div id="qr-holder"></div>
-    <div class="payee">Murali S</div>
+    <div class="payee" id="payee-name"></div>
     <div class="upi-row">
-      <span id="upi-id-text">muraliit11@okhdfcbank</span>
+      <span id="upi-id-text"></span>
       <button class="copy-btn" onclick="copyUpi()">Copy</button>
     </div>
-    <div class="bank-line">HDFC Bank 8037</div>
+    <div class="bank-line" id="bank-line-text">Replace with shop's bank name</div>
     <button class="done-btn" onclick="markPaid()">I've paid</button>
     <button class="cancel-btn" onclick="closePayModal()">Cancel</button>
   </div>
@@ -800,8 +800,8 @@
     { id: "tiger-prawns", name: "Tiger Prawns", unit: "per kg", price: 650, emoji: "🦐", addedAt: 13 },
   ];
 
-  const UPI_ID = "muraliit11@okhdfcbank";
-  const UPI_NAME = "Murali S";
+  const UPI_ID = "REPLACE_WITH_SHOP_UPI_ID"; // e.g. shopowner@okhdfcbank — get this from the shop owner before deploying
+  const UPI_NAME = "REPLACE WITH SHOP OWNER NAME"; // must match the name registered on their UPI ID
   const SHOP_NAME = "FreshMeat Shop";
   const SHOP_ADDRESS = "110, Subhashree Nagar, Phase 1 Extn, Mugalivakkam, Chennai";
   const SHOP_MOBILE = "9940491206";
@@ -1251,6 +1251,8 @@
     if (total === 0) return;
     document.getElementById("pay-amount").textContent = "₹" + total;
     document.getElementById("pay-invoice-no").textContent = currentInvoice ? currentInvoice.no : "";
+    document.getElementById("payee-name").textContent = UPI_NAME;
+    document.getElementById("upi-id-text").textContent = UPI_ID;
     const upiUrl = `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(UPI_NAME)}&am=${total}&cu=INR&tn=${encodeURIComponent(currentInvoice ? currentInvoice.no : "")}`;
     const holder = document.getElementById("qr-holder");
     holder.innerHTML = "";

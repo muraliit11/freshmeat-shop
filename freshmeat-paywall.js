@@ -18,7 +18,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // ---- Trial & Paywall Logic (Phone-verified, Firestore-backed) ----
-const TRIAL_HOURS = 1;
+const TRIAL_HOURS = 2;
 const PLATFORM_UPI_ID = "9940491206@upi"; // platform owner's UPI ID — access-fee payments always go here, same across all customer deployments, do not change per customer
 
 // Access-fee tiers. All paid to PLATFORM_UPI_ID (this is the platform's own
@@ -142,12 +142,26 @@ function showOtpEntryScreen(phone) {
     try {
       await confirmationResult.confirm(code);
       setVerifiedPhone(phone);
-      removeOverlay();
-      checkAccess();
+      showTrialStartedScreen();
     } catch (err) {
       errorEl.textContent = "Incorrect code. Please try again.";
       console.error(err);
     }
+  });
+}
+
+function showTrialStartedScreen() {
+  showOverlay(`
+    <div style="background:#F7F1EA; border-radius:16px; padding:28px; max-width:340px; text-align:center; font-family:'Inter',sans-serif;">
+      <h2 style="margin:0 0 8px;">You're verified! 🎉</h2>
+      <p style="color:#8A6F5C; margin:0 0 16px;">Enjoy ${TRIAL_HOURS} hours of free access. After that, you can choose a plan to continue.</p>
+      <button id="fm-start-shopping-btn" style="width:100%; padding:12px; background:#7A2323; color:white; border:none; border-radius:8px; font-size:16px;">Start Shopping</button>
+    </div>
+  `);
+
+  document.getElementById("fm-start-shopping-btn").addEventListener("click", () => {
+    removeOverlay();
+    checkAccess();
   });
 }
 
